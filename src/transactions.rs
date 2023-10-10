@@ -812,7 +812,11 @@ impl<'db> WriteTransaction<'db> {
             Durability::Immediate => self.durable_commit(false, false)?,
             Durability::Paranoid => self.durable_commit(false, true)?,
         }
-
+        #[cfg(feature = "logging")]
+        info!(
+            "Finished commit durability of transaction id={:?}",
+            self.transaction_id
+        );
         for (savepoint, transaction) in self.deleted_persistent_savepoints.lock().unwrap().iter() {
             self.transaction_tracker
                 .lock()

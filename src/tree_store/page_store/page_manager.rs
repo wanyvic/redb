@@ -10,7 +10,7 @@ use crate::tree_store::page_store::{hash128_with_seed, PageImpl, PageMut};
 use crate::tree_store::{Page, PageNumber};
 use crate::{DatabaseError, Result, StorageError};
 #[cfg(feature = "logging")]
-use log::warn;
+use log::{info, warn};
 use std::cmp::{max, min};
 #[cfg(debug_assertions)]
 use std::collections::HashMap;
@@ -519,8 +519,12 @@ impl TransactionalMemory {
         #[cfg(debug_assertions)]
         debug_assert!(self.open_dirty_pages.lock().unwrap().is_empty());
         assert!(!self.needs_recovery.load(Ordering::Acquire));
-
+        #[cfg(feature = "logging")]
+        info!("commit_inner1");
         let mut state = self.state.lock().unwrap();
+
+        #[cfg(feature = "logging")]
+        info!("commit_inner2");
         // Trim surplus file space, before finalizing the commit
         let shrunk = self.try_shrink(&mut state)?;
         // Copy the header so that we can release the state lock, while we flush the file
@@ -534,8 +538,12 @@ impl TransactionalMemory {
         secondary.system_root = system_root;
         secondary.freed_root = freed_root;
 
+        #[cfg(feature = "logging")]
+        info!("commit_inner3");
         self.write_header(&header, false)?;
 
+        #[cfg(feature = "logging")]
+        info!("commit_inner4");
         // Use 2-phase commit, if checksums are disabled
         if two_phase {
             if eventual {
@@ -552,6 +560,9 @@ impl TransactionalMemory {
         } else {
             self.storage.flush()?;
         }
+
+        #[cfg(feature = "logging")]
+        info!("commit_inner5");
         // Only swap the in-memory primary bit after the fsync is successful
         header.swap_primary_slot();
 
@@ -566,6 +577,8 @@ impl TransactionalMemory {
         }
         self.allocated_since_commit.lock().unwrap().clear();
 
+        #[cfg(feature = "logging")]
+        info!("commit_inner6");
         let mut state = self.state.lock().unwrap();
         assert_eq!(
             state.header.secondary_slot().transaction_id,
@@ -577,6 +590,8 @@ impl TransactionalMemory {
         // TODO: maybe we can remove the whole read_from_secondary flag?
         drop(state);
 
+        #[cfg(feature = "logging")]
+        info!("commit_inner7");
         Ok(())
     }
 
@@ -781,7 +796,11 @@ impl TransactionalMemory {
     }
 
     pub(crate) fn get_last_committed_transaction_id(&self) -> Result<TransactionId> {
+        #[cfg(feature = "logging")]
+        info!("get_last_committed_transaction_id before lock");
         let state = self.state.lock().unwrap();
+        #[cfg(feature = "logging")]
+        info!("get_last_committed_transaction_id after lock");
         if self.read_from_secondary.load(Ordering::Acquire) {
             Ok(state.header.secondary_slot().transaction_id)
         } else {
